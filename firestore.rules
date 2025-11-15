@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection: authenticated users can read/write their own data
+    // Public can read user info for marketplace display (name, location only)
+    match /users/{userId} {
+      // Allow public read for marketplace artisan info (name, location)
+      // Allow authenticated users to read/write their own data
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Products collection: 
+    // - Public can read published products (for marketplace)
+    // - Authenticated users can create their own products
+    // - Owners can update/delete their own products
+    match /products/{productId} {
+      // Allow read if product is published OR user is the owner
+      // Note: For list queries, Firestore checks this rule for each document
+      allow read: if resource.data.status == 'published' || 
+                     (request.auth != null && resource.data.uid == request.auth.uid);
+      
+      // Allow create if authenticated and owns the product
+      allow create: if request.auth != null && 
+                       request.resource.data.uid == request.auth.uid &&
+                       request.resource.data.status == 'published';
+      
+      // Allow update/delete if authenticated and owns the product
+      allow update, delete: if request.auth != null && 
+                               resource.data.uid == request.auth.uid;
+    }
+    
+    // Default: deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
